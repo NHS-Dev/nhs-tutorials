@@ -1,0 +1,312 @@
+---
+title: "Accessing and Viewing Regional Deterministic Reforecast System (RDRS) Data"
+subtitle: '<span style=''font-size: 18px''>Table of Contents'
+output:
+  html_document:
+    number_sections: no
+    theme: united
+    toc: yes
+    toc_depth: 2
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
+---
+
+The goal of this tutorial is to help the user access, download, and view the Regional Deterministic Reforecast System (RDRS). RDRS data is  accessed throught the Canadian Surface Prediction Archive (CaSPAr), an archive of numerical weather predicitions issued by Environment and Climate Change Canada. While there are multiple available datasets available through [CaSPAr](https://caspar-data.ca/), this tutotial will focus on RDRS but the methodolgoy can be applied to access and view other avialble datasets.
+
+# Accessing and signing in to CaSPAr
+
+The CaSPAr website is located at https://caspar-data.ca/. Before downloading data from CaSPAr, you must first register for an account. Detailed instructions on account creation are located [here](https://github.com/julemai/CaSPAr/wiki/How-to-get-started-and-download-your-first-data#create-an-account).
+
+# RDRS data overview and download
+
+RDRS is a approximately 10 km resolution, hourly reanalysis for North America. Three versions of RDRS are available through CaSPAr, which include:
+
+* RDRS_v1: hourly dataset from 01/2020 to 12/2014
+* RDRS_V2: hourly dataset from 01/2000 to 12/2017
+* RDRS_v2.1: hourly dataset from 01/1980 to 12/2018
+
+These datasets are available through the CaSPAR data [portal](https://caspar-data.ca/caspar), although there are several steps required to access the data. The selection requirements are ourlined below and additionally indicated in the accompanying image:
+
+1. Dataset to be downloaded
+2. Date range
+3. Variables
+4. Forecast horizons
+5. Forecast issues
+
+The dataset to be downloaded (1) can be selected from the dropdown box and will most likely be the *RDRS_v2.1: hourly dataset from 01/1980 to 12/2018*, as it is th most recent and includes the entirety of North America for RDRS. The date range (2) can be selected as any timeframe between January 1^st^, 1980 and December 31^st^, 2018. Note that the end date is the first date not included in the data request. There are a number of available variables (3) that can be selected based on user needs. One or more variable can be selected at a given time; information on the naming convention can be found [here](https://github.com/julemai/CaSPAr/wiki/CaSPAr-file-naming-convention-and-variables). The forecast horizons (4) are the lead times available to be downloaded for a given forecast. In the case of RDRS, forecasts are provided hourly throughout the day. The forecast issues (5) is the time the forecast is issued and in the case of RDRS, there is only one forecast issued per day at 12:00. The domain of interest can be manually selected using the *polygon* or *rectangle* icons but alternatively a shapefile or GeoJSON or the area can be uploaded (click [here](https://github.com/julemai/CaSPAr/wiki/How-to-get-started-and-download-your-first-data) for more guidance). Data can then be requested and will be emailed after clicking the *PROCESS* button. 
+
+![](C:\Users\obrienn\Documents\Prediction\RDRSRequestScreenEdited.PNG)
+
+Deterministic products, such as the RDRS data have a YYYYMMDDHH.nc, where the .nc file extension indicates a NetCDF file. An example for RDRS would be 1980010112.nc, which is the forecast for January 1^st^, 1980 at 12:00. Since forecasts are only issued daily at 12:00 for RDRS, all files will be in the form YYYYMMDD12.nc.
+
+# Opening NetCDF files and accessing metadata
+Having downloaded NetCDF data from CaSPAr, we can now view the metadata. NetCDF is a binary file format, so we cannot open these files in a text editor to view the metadata. We can do so, however, using the [ncdf4](https://cran.r-project.org/web/packages/ncdf4/ncdf4.pdf) package from the R repository. We're also going to need the [raster](https://cran.r-project.org/web/packages/raster/index.html), [rgdal](https://cran.r-project.org/web/packages/rgdal/index.html), [ggplot2](https://cran.r-project.org/web/packages/ggplot2/index.html), and [lubridate](https://cran.r-project.org/web/packages/lubridate/lubridate.pdf), [terra] (https://cran.r-project.org/web/packages/terra/terra.pdf), and [sp] (https://cran.r-project.org/web/packages/sp/sp.pdf) packages for this tutorial, so we'll install all the required packages to begin. Also, before opening the file in R, you must set the working directory to where the NetCDF data is located using the setwd() command.
+
+```{r, eval=F}
+#Install the ncdf4 package
+install.packages("ncdf4")
+
+#Install the raster package
+install.packages("raster")
+
+#Install the rgdal package
+install.packages("rgdal")
+
+#Install the ggplot2 package
+install.packages("ggplot2")
+
+#Install the lubridate package
+install.packages("lubridate")
+
+#Install the terra package
+install.packages("terra")
+
+#Install the sp package
+install.packages("sp")
+```
+
+
+```{r, warning=F, message=F}
+#Load the packages
+library(ncdf4)
+library(raster)
+library(rgdal)
+library(ggplot2)
+library(lubridate)
+library(terra)
+library(sp)
+
+#Read in a NetCDF file
+filename<- "1980010112.nc"
+nc <- nc_open(filename)
+
+#View the NetCDF metadata
+print(nc)
+```
+
+This prints the metadata of the NetCDF file, through which we can see that there are 8 variables, 3 dimensions, and four 4 global attributes. Therefore, only 5 variables were selected when the data was downloaded from CaSPAr, which include:
+
+1. Forecast: corrected U-component of the wind (along West-East direction)
+2. Forecast: corrected V-component of the wind (along South-North direction)
+3. Analysis: Quantity of precipitation
+4. Forecast: Quantity of precipitation
+5. Forecast: Air temperature
+
+The remining variables are:
+
+1. Latitude
+2. Longitude
+3. Coordinates of the rotated North Pole
+
+The latitude and longitude in this instance are referenced against a rotated latitude (rlat) and rotated longitude (rlon), which are provided in the dimensions section of the NetCDF metadata and shown below. In this instance, rlat is an array of size 1x192 and rlon is 1x183, and although it isn't shown, time is 24 hours (for each of the available forcasts throughout the day).
+
+![](C:\Users\obrienn\Documents\Prediction\dimensions.PNG)
+
+Read and store the dimensions and variables:
+
+```{r, warning=F, message=F}
+#Read and store the dimensions: lattitude, longintude, time, rlat, and rlon  
+lat <- ncvar_get(nc, "lat")
+lon <- ncvar_get(nc, "lon")
+t <- ncvar_get(nc, "time")
+rlat <- ncvar_get(nc, "rlat")
+rlon <- ncvar_get(nc, "rlon")
+
+#Confirm the size of the dimensions
+dim(lat)
+dim(lon)
+dim(t)
+dim(rlat)
+dim(rlon)
+
+#Read in data arrays
+C_UCoW <- ncvar_get(nc, "RDRS_v2.1_P_UUC_10m") # Forecast: corrected U-component if the wind
+C_VCoW <- ncvar_get(nc, "RDRS_v2.1_P_VVC_10m") # Forecast: corrected V-component of the wind
+A_QoP <- ncvar_get(nc, "RDRS_v2.1_A_PR0_SFC") # Analysis: Quantity of precipitation
+F_QoP <- ncvar_get(nc, "RDRS_v2.1_P_PR0_SFC") # Forecast: Quantity of precipitation
+F_AT <- ncvar_get(nc, "RDRS_v2.1_P_TT_1.5m") # Forecast: Air temperature
+
+#Check the dimensions and confirm we have a 3-Dimentional array of forecasts
+#dimension are 183 x 192 x 24 (rlon x rlat x time)
+dim(A_QoP)
+```
+
+We can see that lattitude and longitude are 183 x 192 2-dimensional arrays and time is a vector of size 24. Reading in the Quantity of Precipitation Analysis data (A_QoP) above, it can be confirmed that the we have a 3-dimensional array of observations (183 x 192 x 24). You can use these commands to explore the other variables present in your NetCDF file as well.  
+
+# View a NetCDF file
+
+Understanding the structure and dimensions of the NetCDF is important before visualizing the data. For this exercise, we'll plot the 11am forecast for the *nc* NetCDF that has previous been read in.
+
+```{r, warning=F, message=F}
+#Analysis: Quantity of Precipitation variable's, 11am forecast
+A_Qop_11 <- A_QoP[,,11]
+
+#Used the terra package to read the Analysis: Quantity of Precipitation variable as a SpatRaster and convert to a raster
+#Note the projection is in rotated coordinates
+A_Qop_SP<-rast(filename,subds="RDRS_v2.1_A_PR0_SFC")
+A_Qop_rast<-as(A_Qop_SP, "Raster")
+
+#Plot the 11am forecast
+plot(subset(A_Qop_rast,"RDRS_v2.1_A_PR0_SFC_11"), main="Precipitation - 11am Reanalysis Forecast", ylab="lat", xlab="lon")
+```
+
+We can provide additional context to our raster data by overlaying it with the Canadian provinces and territories digital boundary file, which will allow you determine the spacial extent of the data. We can download these boundaries as a shapefile (.shp) from [here](https://www12.statcan.gc.ca/census-recensement/2011/geo/bound-limit/bound-limit-2011-eng.cfm). This shapefile can then be plotted with the raster file, through which we can see that the domain of the raster covers Atlantic Canada and portions of Quebec and Ontario.
+
+```{r, warning=F, message=F}
+#Read in the boundary shapefile
+sha <- readOGR("gpr_000a11a_e.shp")
+
+#Longintude of the rotated pole
+rpole_lon <- round(ncatt_get(nc, "rotated_pole")$grid_north_pole_latitude, digits=6)
+#Longintude of the rotated pole
+rpole_lat <- round(ncatt_get(nc, "rotated_pole")$grid_north_pole_longitude + 180, digits=6) # need to add 180 here for proj longitude format
+#Earth radius
+earth_rad <- round(ncatt_get(nc, "rotated_pole")$earth_radius, digits=0)
+#Build the projection string of the rotated grid
+proj_str <- paste("+proj=ob_tran +o_proj=longlat +lon_0=",rpole_lat," +o_lon_p=0 +o_lat_p=",rpole_lon," +R=",earth_rad," +no_defs", sep="")
+
+#Determine the unrotated raster extents
+rast_ext <- ext(rast(filename))
+    
+#Convert the 11am precipitation forcast to a raster and set the rotated projection
+A_Qop_11_rast <- raster(A_Qop_11, xmn=rast_ext[1], xmx=rast_ext[2], ymn=rast_ext[3], ymx=rast_ext[4], crs=CRS(proj_str))
+#Reproject the raster to EPSG:4326
+A_Qop_11_rast<-projectRaster(A_Qop_11_rast, crs="+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs")
+
+#We'll use the ggplot2 package to plot the raster and shapefile but must first convert the data to data frame formats
+A_Qop_11_DF <- as.data.frame(A_Qop_11_rast, xy = TRUE)
+sha <- fortify(sha, region='PRUID')
+
+#Plot the raster and shapfile
+ggplot() + geom_tile(data=A_Qop_11_DF, aes(x=x, y=y, fill=layer), alpha=0.8) + 
+  geom_polygon(data=sha, aes(x=long, y=lat, group=group), fill=NA, color="grey50", size=0.25) +
+  ggtitle("Quantity of Precipitation - 11am Forecast") + labs(y = "lat", x = "lon")
+```
+
+# Plotting timeseries data
+
+We will now explore how to optain and plot data at a specific location. We'll plot the Forecast: Air Temperature variable for January 1st, 1980 for the 24 available forecasts at the Sackville River at Bedford (01EF001) hydrometric station in Nova Scotia.
+
+```{r, warning=F, message=F}
+#Coordinates of the Sackville River at Bedford (01EF001) hydrometric station
+SRaB_lat <- 44.73139
+SRaB_lon <- -63.66028
+
+#Set the EPSG:4326 projection of the coordinate
+newPoints<-SpatialPoints(cbind(SRaB_lon,SRaB_lat), proj4string = CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))
+#Transformation the coordinates to the projection of the rotated grid
+coords<-spTransform(newPoints, CRS(proj_str))
+
+#Create a SpatRaster and raster of air temperatures
+F_AT_SP<-rast(filename,subds="RDRS_v2.1_P_TT_1.5m")
+F_AT_rast<-as(F_AT_SP, "Raster")
+
+#Extract the timeseries of from the air temperature raster
+SRaB_series<-extract(F_AT_rast,data.frame(cbind(ext(coords)[1],ext(coords)[3])))
+
+#Determine the date of the forecast
+year<-as.numeric(substr(filename,1,4))
+month<-as.numeric(substr(filename,5,6))
+day<-as.numeric(substr(filename,7,8))
+
+#Convert from UTC to AST
+dateVec <- seq(as.POSIXct(paste(year,"-",month,"-",day, " 12:00:00",sep="")), as.POSIXct(paste(year,"-",month,"-",day+1, " 11:00:00",sep="")), by="hour")
+tz(dateVec) <- "UTC"
+date<-with_tz(dateVec, tzone = "America/Curacao")
+
+#Plot the timeseries data
+plot(date,SRaB_series, main=paste("January 1st, 1980 Air Temperatures near","\n",
+  "Sackville River at Bedford (01EF001)"), xlab= "Time (hours)", ylab="Temperature (\u00B0C)", 
+  type = "l", lwd=2)
+```
+
+We can append the data from multiple NetCDF files to create multi-day plots as well.
+
+```{r, warning=F, message=F}
+
+#Function to create multi-day datasets from a specified directory
+plot_nc_dat <- function(directory) {
+  #List all files in directory
+  filenames<-list.files(as.vector(directory), full.names = TRUE, pattern= "*.nc")
+  numFiles<-length(filenames)
+
+  #Loop over each file in the directory
+  for (i in 1:numFiles) {
+    
+    #Read in the NetCDF data
+    datNC <- nc_open(filenames[i])
+    datSP_A_QoP <- rast(filenames[i],subds="RDRS_v2.1_A_PR0_SFC")
+    datSP_C_UCoW <- rast(filenames[i],subds="RDRS_v2.1_P_UUC_10m")
+    datSP_C_VCoW <- rast(filenames[i],subds="RDRS_v2.1_P_VVC_10m")
+    
+    #NetCDF variables
+    C_UCoW <- ncvar_get(datNC, "RDRS_v2.1_P_UUC_10m")
+    C_VCoW <- ncvar_get(datNC, "RDRS_v2.1_P_VVC_10m")
+    A_QoP <- ncvar_get(datNC, "RDRS_v2.1_A_PR0_SFC")
+   
+    #Date array, edit as required depending on the length of the file path name
+    year<-as.numeric(substr(filenames[i],6,9))
+    month<-as.numeric(substr(filenames[i],10,11))
+    day<-as.numeric(substr(filenames[i],12,13))
+    
+    #Convert to raster
+    A_Qop_rast<-as(datSP_A_QoP, "Raster")
+    C_UCoW_rast<-as(datSP_C_UCoW, "Raster")
+    C_VCoW_rast<-as(datSP_C_VCoW, "Raster")
+
+    #Coordinates of St. John's Newfoundland airport
+    data_lat <- 47.62222 
+    data_lon <- -52.74278
+    
+    newPoints<-SpatialPoints(cbind(data_lon,data_lat), proj4string = CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))
+
+    rpole_lon <- round(ncatt_get(datNC, "rotated_pole")$grid_north_pole_latitude, digits=6)
+    rpole_lat <- round(ncatt_get(datNC, "rotated_pole")$grid_north_pole_longitude + 180, digits=6)
+    earth_rad <- round(ncatt_get(datNC, "rotated_pole")$earth_radius, digits=0)
+    proj_str <- paste("+proj=ob_tran +o_proj=longlat +lon_0=",rpole_lat," +o_lon_p=0 +o_lat_p=",rpole_lon," +R=",earth_rad," +no_defs", sep="")
+    
+    coords<-spTransform(newPoints, CRS(proj_str))
+    
+    data_series_A_QoP<-extract(A_Qop_rast,data.frame(cbind(ext(coords)[1],ext(coords)[3])))
+    data_series_C_UCoW<-extract(C_UCoW_rast,data.frame(cbind(ext(coords)[1],ext(coords)[3])))
+    data_series_C_VCoW<-extract(C_VCoW_rast,data.frame(cbind(ext(coords)[1],ext(coords)[3])))
+
+    #Create time in Atlantic Time
+    dateVec <- seq(as.POSIXct(paste(year,"-",month,"-",day, " 12:00:00",sep="")), as.POSIXct(paste(year,"-",month,"-",day+1, " 11:00:00",sep="")),  by="hour")
+    tz(dateVec) <- "UTC"
+    date<-with_tz(dateVec, tzone = "America/Curacao")
+
+    #Create data and date array
+    nc_dat_temp_A_QoP <- data.frame(date, as.numeric(data_series_A_QoP))
+    nc_dat_temp_C_UCoW <- data.frame(date, as.numeric(data_series_C_UCoW))
+    nc_dat_temp_C_VCoW <- data.frame(date, as.numeric(data_series_C_VCoW))
+    
+    if (i == 1) {
+      nc_dat_A_QoP <- nc_dat_temp_A_QoP
+      nc_dat_C_UCoW <- nc_dat_temp_C_UCoW
+      nc_dat_C_VCoW <- nc_dat_temp_C_VCoW
+
+    } else {
+      nc_dat_A_QoP <- rbind(nc_dat_A_QoP,nc_dat_temp_A_QoP)
+      nc_dat_C_UCoW <- rbind(nc_dat_C_UCoW,nc_dat_temp_C_UCoW)
+      nc_dat_C_VCoW <- rbind(nc_dat_C_VCoW,nc_dat_temp_C_VCoW)
+    }
+  }
+
+  #Edit plot call as required, plot one variable (precipitation)
+  plot(x=nc_dat_A_QoP[,1],y=nc_dat_A_QoP[,2]*1000, main=paste("Precipitation from Hurricane Igor at","\n",
+    "St. John's Airport, Newfoundland","\n","September 18th-22nd, 2010"), xlab= "Hourly Data", 
+    ylab="Precipitation (mm)", type = "l", lwd=1, ylim=c(0,max(nc_dat_A_QoP[,2])*1000), col="blue")
+
+  #Edit plot call as required, plot two variables
+  plot(x=nc_dat_C_UCoW[,1],y=nc_dat_C_UCoW[,2], main=paste("Windspeed from Hurricane Igor at","\n",
+    "St. John's Airport, Newfoundland","\n", "September 18th-22nd, 2010"),xlab= "Hourly Data", ylab="Knots",
+    type = "l", lwd=1, ylim=c(min(nc_dat_C_VCoW[,2]),(max(nc_dat_C_UCoW[,2])+20)), col="blue")
+  lines(x=nc_dat_C_VCoW[,1],y=nc_dat_C_VCoW[,2], col="red")
+  #Add a legend
+  legend(x="topleft",legend=c("Zonal Component (U-Component)","Meridional Component (V-Component)"), 
+    col=c("blue","red"), lwd=c(2,2))
+}
+plot_nc_dat("Igor")
+```
