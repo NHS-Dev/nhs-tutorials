@@ -8,6 +8,6 @@ As these tutorials and examples are actively being developed, updated and improv
 
 Contents:
 
-1. [python-Examples](/python-examples/README-Python.md)
+1. [python-Examples](/python-examples/)
 2. [R-Examples](/R-examples/)
 3. [qgis-examples](/qgis-examples/)
