@@ -2,4 +2,4 @@
 .ipynb_checkpoints
 python-examples/caspar-rdrs-igor-2010-09/
 python-examples/caspar-rdrs-leslie-2012-09/
-python-examples/snow-water-equivalent/CanSWE-CanEEN_1928-2022_v5.csv
+python-examples/snow-water-equivalent/CanSWE-CanEEN_*.csv
