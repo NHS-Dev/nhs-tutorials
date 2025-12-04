@@ -1,0 +1,12 @@
+name: capa
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - numpy
+  - xarray
+  - requests
+  - matplotlib
+  - cartopy
+  - ipykernel
+  - cfgrib
